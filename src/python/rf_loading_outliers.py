@@ -343,7 +343,7 @@ def main():
 
         sys.stdout = old_stdout
         log_file.close()
-        telegram_bot_sendtext(TELEGRAM_MSG)
+        # telegram_bot_sendtext(TELEGRAM_MSG)
 
 
 
