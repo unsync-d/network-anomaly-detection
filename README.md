@@ -9,19 +9,15 @@
 ![figures/final_flux_wmods.png](figures/final_flux_wmods.png)
 
 ## Instalación
-Con el objetivo de que el _dataset_ esté disponible se ha empleado [GIT LFS](https://git-lfs.github.com/). Para poder descargarlo con el repositorio es necesario tener instalado GIT LFS. Además, también hace falta, como se indica en la sección _Getting Started_ de su página de instalación, ejecutar el comando siguiente para inicializar GIT LFS:
+Además de clonar el respositorio, es necesario descargar el _dataset_ para poder ejecutar los _scripts_. Para ello podemos usar la siguiente secuencia de comandos desde dentro del respositorio:
 
+### En sistemas Linux:
 ```bash
-git lfs install
-```
-Después el clomando `clone` de git ya debería incluir la descarga del dataset a partir del link que hay en el repositorio:
-
+cd data
+wget -O dataset_dist.csv "https://udcgal-my.sharepoint.com/:x:/g/personal/julio_jairo_estevez_pereira_udc_es/EQWdSJToODxJhYe9gaWyV0MBWI19AxHXivB1y4-DrP4Myg?e=9fzMs6&download=1"
+````
+### En sistemas Windows (desde Powershell):
 ```bash
-git clone
-```
-
-En caso de que no funcionase correctamente, se podría probar a ejecutar el siguiente comando. Es equivalente al `git clone` pero está deprecado:
-
-```bash
-git lfs clone
-```
+cd data
+wget "https://udcgal-my.sharepoint.com/:x:/g/personal/julio_jairo_estevez_pereira_udc_es/EQWdSJToODxJhYe9gaWyV0MBWI19AxHXivB1y4-DrP4Myg?e=9fzMs6&download=1" -OutFile dataset_dist.csv
+````
