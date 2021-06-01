@@ -23,11 +23,6 @@ import sys
 import json
 from os import sched_getaffinity
 
-
-TELEGRAM_BOT_TOKEN = "832826965:AAHM1Rr0UvX4v8EwR9QoYF44UsuKhXuvim0"
-TELEGRAM_CHAT_ID = "449243443"
-TELEGRAM_MSG = "Results are waiting for you, honey."
-
 GENERAL_RESULTS_PATH = r'../Resultados/'
 #DATASET_PATH = r'../Data/g2fe_dataset_o2.csv'
 #TARGET_PATH = r'../Data/g2fe_target_o2.csv'
@@ -348,7 +343,7 @@ def main():
 
         sys.stdout = old_stdout
         log_file.close()
-        telegram_bot_sendtext(TELEGRAM_MSG)
+        # telegram_bot_sendtext(TELEGRAM_MSG)
 
 
 
