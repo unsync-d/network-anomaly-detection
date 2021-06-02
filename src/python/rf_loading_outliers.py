@@ -21,27 +21,20 @@ import os
 import time
 import sys
 import json
-from os import sched_getaffinity
+# from os import sched_getaffinity
 
-GENERAL_RESULTS_PATH = r'../Resultados/'
-#DATASET_PATH = r'../Data/g2fe_dataset_o2.csv'
-#TARGET_PATH = r'../Data/g2fe_target_o2.csv'
-DATASET_PATH = r'../Data/dataset_dist.csv'
+GENERAL_RESULTS_PATH = r'../../results/'
 
-OUTLIERS_PATH = r'../Outliers/OUTLIERS_EJECUCION_2021_02_02_19_47_27/it_0/CV_O_{}'
+DATASET_PATH = r'../../data/dataset_dist.csv'
 
-SPLITS_OUTER_CV=10
-SPLITS_INNER_CV=5
-PARALLELIZATION = len(sched_getaffinity(0))
+OUTLIERS_PATH = r'../../outliers/MOD_final'
 
-def telegram_bot_sendtext(bot_message):
-
-    send_text = 'https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/sendMessage?chat_id=' + str(TELEGRAM_CHAT_ID) + '&parse_mode=Markdown&text=' + bot_message
-
-    response = requests.get(send_text)
-
-    return response.json()
-
+# SPLITS_OUTER_CV=10
+SPLITS_OUTER_CV=2
+# SPLITS_INNER_CV=5
+SPLITS_INNER_CV=3
+# PARALLELIZATION = len(sched_getaffinity(0))
+PARALLELIZATION = 1
 
 def ManualOutlierDetection(innerX, innerY):
     innerX['DTstartDateTime'] = pd.to_datetime(innerX['startDateTime'], format='%Y-%m-%dT%H:%M:%S', errors='coerce')
@@ -80,7 +73,7 @@ def UnderSampler(X, y):
 def stringify_params(param):
     return str(param[0]) + "_" + str(param[1]) + "_" + str(param[2])
 
-def myGSCV(X_train, y_train, op, params, n_splits=5):
+def myGSCV(X_train, y_train, params, n_splits=5):
     best_score = 0
     best_parameters = []
 
@@ -99,16 +92,13 @@ def myGSCV(X_train, y_train, op, params, n_splits=5):
     for param in params:
         ### Recuperamos outliers del archivo correspondente
         # OP -> Outliers Path
-        concrete_OP = op + r'/' + r'GSCV' + r'/' + stringify_params(param) # Cuidado con esto, sólo funciona si existe el 
-                                                                           # directorio con esos outliers. Y sólo existen directorios
-                                                                           #concretos. Para pruebas descomentar siguiente linea y comentar esta
-        # concrete_OP = op + r'/' + r'GSCV' + r'/' + r'800_gini_5'
-        filepath = concrete_OP + r'/' r'MOD_dictionary_{}'
+        filepath = OUTLIERS_PATH
         it = 0
-        outliers_holder = []
-        for it in range(0,n_splits):
-            with open(filepath.format(it), "rb") as jsonfile:
-                outliers_holder.append(pickle.load(jsonfile))
+        outliers_holder = {}
+
+        with open(filepath, "rb") as jsonfile:
+            outliers_holder = pickle.load(jsonfile)
+
 
         this_model = RandomForestClassifier(n_estimators=param[0],
                                             criterion=param[1],
@@ -130,17 +120,17 @@ def myGSCV(X_train, y_train, op, params, n_splits=5):
             X_in_train.reset_index(drop=True, inplace=True)
             y_in_train.reset_index(drop=True, inplace=True)
 
-            print("      STARTING INNER OUTLIER DETECTION: PARAMS({}) IT({})".format(param,n_split))
+            print("         STARTING INNER OUTLIER DETECTION: PARAMS({}) IT({})".format(param,n_split))
             sys.stdout.flush()
-            print("         TRAIN SET ROWS BEFORE OD: {}".format(len(X_in_train.index)))
+            print("            TRAIN SET ROWS BEFORE OD: {}".format(len(X_in_train.index)))
             sys.stdout.flush()
 
-            print("         ROWS TAKEN BY OD: {} MOD".format(len(outliers_holder[n_split]['MOD'])))
+            print("            ROWS TAKEN BY OD: {} MOD".format(len(outliers_holder['MOD'])))
             sys.stdout.flush()
 
             ## Detección de outliers en entrenamiento
-            mod_X_train = X_in_train.iloc[X_in_train.index.difference(outliers_holder[n_split]['MOD'])]
-            mod_y_train = y_in_train.iloc[y_in_train.index.difference(outliers_holder[n_split]['MOD'])] 
+            mod_X_train = X_in_train.iloc[X_in_train.index.difference(outliers_holder['MOD'])]
+            mod_y_train = y_in_train.iloc[y_in_train.index.difference(outliers_holder['MOD'])] 
             
             # No debería ser necesario en el último conjunto de datos
             # mod_X_train.drop(['startDateTime', 'stopDateTime'], axis = 1, inplace=True)
@@ -149,19 +139,19 @@ def myGSCV(X_train, y_train, op, params, n_splits=5):
             mod_y_train.reset_index(drop=True, inplace = True)
 
 
-            print("         TRAIN SET ROWS AFTER OD: {}\n".format(len(mod_X_train.index)))
+            print("            TRAIN SET ROWS AFTER OD: {}\n".format(len(mod_X_train.index)))
             sys.stdout.flush()
 
-            print("      STARTING INNER UNDERSAMPLING: PARAMS({}) IT({})".format(param,n_split))
+            print("         STARTING INNER UNDERSAMPLING: PARAMS({}) IT({})".format(param,n_split))
             sys.stdout.flush()
-            print("         TRAIN SET ROWS BEFORE SAMPLING: {}".format(len(mod_X_train.index)))
+            print("            TRAIN SET ROWS BEFORE SAMPLING: {}".format(len(mod_X_train.index)))
             sys.stdout.flush()
 
             # Undersampling entrenamiento
             mod_X_train, mod_y_train = UnderSampler(mod_X_train, mod_y_train)
-            print("         TRAIN SET ROWS AFTER SAMPLING: {}\n".format(len(mod_X_train.index)))
+            print("            TRAIN SET ROWS AFTER SAMPLING: {}\n".format(len(mod_X_train.index)))
             sys.stdout.flush()
-            print("      INNER MODEL TRAINING: PARAMS({}) IT({})\n".format(param,n_split))
+            print("         INNER MODEL TRAINING: PARAMS({}) IT({})\n".format(param,n_split))
             sys.stdout.flush()
 
             # Entrenamiento del modelo
@@ -220,22 +210,24 @@ def main():
     y = X[['Target']]
     X.drop(['row_id', 'Target'], inplace=True, axis=1)
     
+
+    ## Definición del nombre de archivos de resultados
+    RESULTS_FOLDER = datetime.now().strftime(r'RF_LOADED_O_RESULTADOS_EJECUCION_%Y_%m_%d_%H_%M_%S')
+    RESULTS_PATH = datetime.now().strftime(r'../../results/{}/it_{}_rf_%Y_%m_%d_%H_%M_%S.results')
+    LOG_FILE_PATH = datetime.now().strftime(r'../../logs/log_%Y_%m_%d_%H_%M_%S.log')
+    try:
+        os.makedirs(GENERAL_RESULTS_PATH + "/" + RESULTS_FOLDER)
+    except OSError as e:
+        raise
+
+    ### Redireccionamos salida estándar al archivo de log 
+    log_file = open(LOG_FILE_PATH, "w")
+    old_stdout = sys.stdout
+    sys.stdout = log_file
+
+
     ## Repeticiones para probar consistencia con diferentes semillas
     for i in range(0,1):
-        ## Definición del nombre de archivos de resultados
-        RESULTS_FOLDER = datetime.now().strftime(r'RF_LOADED_O_RESULTADOS_EJECUCION_%Y_%m_%d_%H_%M_%S')
-        RESULTS_PATH = datetime.now().strftime(r'../Resultados/{}/it_{}_rf_%Y_%m_%d_%H_%M_%S.results')
-        LOG_FILE_PATH = datetime.now().strftime(r'../Logs/log_%Y_%m_%d_%H_%M_%S.log')
-        try:
-            os.makedirs(GENERAL_RESULTS_PATH + "/" + RESULTS_FOLDER)
-        except OSError as e:
-            raise
-
-        ### Redireccionamos salida estándar al archivo de log 
-        log_file = open(LOG_FILE_PATH, "w")
-        old_stdout = sys.stdout
-        sys.stdout = log_file
-
         ## Calculamos las combinaciones de parámetros
 
         # params_n_estimators = list(range(800,1500,100))
@@ -257,17 +249,19 @@ def main():
         outer_results = {}
         splitN = 0
 
+        print("*************************")
+        print("ITERATION {} IS STARTING.".format(i))
+        print("*************************")
         for train_ix, test_ix in cv_outer.split(X,y):
             ## Recuperamos outliers del archivo donde los guardamos
-            current_OP = OUTLIERS_PATH.format(splitN)
-            filepath = current_OP + r'/' + r'MOD_final_dictionary'
+            filepath = OUTLIERS_PATH
 
-            outliers_holder = {}
+            outliers_holder = []
 
             with open(filepath, "rb") as jsonfile:
                 outliers_holder = pickle.load(jsonfile)
 
-            print("SPLIT {} IS STARTING.".format(splitN))
+            print("   SPLIT {} IS STARTING.".format(splitN))
             sys.stdout.flush()
             X_train, X_test = X.iloc[train_ix, :], X.iloc[test_ix, :]
             y_train, y_test = y.iloc[train_ix, :], y.iloc[test_ix, :]
@@ -275,16 +269,16 @@ def main():
             X_train.reset_index(drop=True, inplace=True)
             y_train.reset_index(drop=True, inplace=True)
 
-            print("   GSCV IS STARTING.")
+            print("      GSCV IS STARTING.")
             sys.stdout.flush()
             # Inner GSCV
-            results = myGSCV(X_train, y_train, current_OP, n_splits=SPLITS_INNER_CV, 
+            results = myGSCV(X_train, y_train, n_splits=SPLITS_INNER_CV, 
                             params=params)
             # EOF Inner GSCV
             
-            print("   STARTING OUTTER OUTLIER DETECTION:")
+            print("      STARTING OUTTER OUTLIER DETECTION:")
             sys.stdout.flush()
-            print("      TRAIN SET ROWS BEFORE OD: {}".format(len(X_train.index)))
+            print("         TRAIN SET ROWS BEFORE OD: {}".format(len(X_train.index)))
             sys.stdout.flush()
 
 
@@ -298,20 +292,20 @@ def main():
             mod_X_train.reset_index(drop=True, inplace = True)
             mod_y_train.reset_index(drop=True, inplace = True)
 
-            print("      TRAIN SET ROWS AFTER OD: {}\n".format(len(mod_X_train.index)))
+            print("         TRAIN SET ROWS AFTER OD: {}\n".format(len(mod_X_train.index)))
             sys.stdout.flush()
 
-            print("   UNDERSAMPLING IS STARTING.")
+            print("      UNDERSAMPLING IS STARTING.")
             sys.stdout.flush()
-            print("      TRAIN SET ROWS BEFORE SAMPLING: {}".format(len(mod_X_train.index)))
+            print("         TRAIN SET ROWS BEFORE SAMPLING: {}".format(len(mod_X_train.index)))
             sys.stdout.flush()
 
             ## Undersampling train
             mod_X_train, mod_y_train = UnderSampler(mod_X_train, mod_y_train)
-            print("      TRAIN SET ROWS AFTER SAMPLING: {}\n".format(len(mod_X_train.index)))
+            print("         TRAIN SET ROWS AFTER SAMPLING: {}\n".format(len(mod_X_train.index)))
             sys.stdout.flush()
 
-            print("   BEST MODEL TRAINING IS STARTING.")
+            print("      BEST MODEL TRAINING IS STARTING.")
             sys.stdout.flush()
             best_model = RandomForestClassifier()
             best_model.set_params(**results['best_params'])
@@ -331,21 +325,18 @@ def main():
                                 'it_{}_inner_GSCV_results'.format(splitN): results}
 
 
-            with open(RESULTS_PATH.format(RESULTS_FOLDER, splitN), "w") as jsonfile:
+            with open(RESULTS_PATH.format(RESULTS_FOLDER, splitN), "a") as jsonfile:
                 json.dump(outer_results, jsonfile)
 
             splitN = splitN + 1
             
-            print("\n-----------------------------------------------------------------\n")
+            print("\n-----------------------------------------------------------------\n\n\n")
             sys.stdout.flush()
 
 
 
-        sys.stdout = old_stdout
-        log_file.close()
-        # telegram_bot_sendtext(TELEGRAM_MSG)
-
-
+    sys.stdout = old_stdout
+    log_file.close()
 
 if __name__ == "__main__":
     main()
