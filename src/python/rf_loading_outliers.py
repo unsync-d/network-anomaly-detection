@@ -21,7 +21,7 @@ import os
 import time
 import sys
 import json
-# from os import sched_getaffinity
+from os import sched_getaffinity
 
 GENERAL_RESULTS_PATH = r'../../results/'
 
@@ -33,36 +33,7 @@ OUTLIERS_PATH = r'../../outliers/MOD_final'
 SPLITS_OUTER_CV=2
 # SPLITS_INNER_CV=5
 SPLITS_INNER_CV=3
-# PARALLELIZATION = len(sched_getaffinity(0))
-PARALLELIZATION = 1
-
-def ManualOutlierDetection(innerX, innerY):
-    innerX['DTstartDateTime'] = pd.to_datetime(innerX['startDateTime'], format='%Y-%m-%dT%H:%M:%S', errors='coerce')
-    innerX['DTstopDateTime'] = pd.to_datetime(innerX['stopDateTime'], format='%Y-%m-%dT%H:%M:%S', errors='coerce')
-    innerX['DTfluxDuration'] = innerX['DTstopDateTime'] - innerX['DTstartDateTime']
-
-    index = list(innerX[innerX.DTfluxDuration <= pd.Timedelta('30 minutes')].index)
-    
-    return innerX.iloc[index].drop(['DTstartDateTime', 'DTstopDateTime', 'DTfluxDuration', 'startDateTime', 'stopDateTime'], axis = 1).reset_index(drop=True), innerY.iloc[index].reset_index(drop=True)
-
-def AutomaticOutlierDetection(X,y):
-    columns = ['totalSourceBytes','totalDestinationBytes']
-    dataset_to_model = X[columns]
-    clf = IsolationForest(n_estimators=100, max_samples='auto', contamination='auto', \
-                    max_features=1.0, n_jobs=PARALLELIZATION, bootstrap = False)
-    clf.fit(dataset_to_model)
-    pred = clf.predict(dataset_to_model)
-    X['anomaly'] = pred
-    outliers = X.loc[X['anomaly']==-1]
-    outliers_index= list(outliers.index)
-    dataset_no_outliers = X.iloc[X.index.difference(outliers_index)]
-    target_no_outliers = y.iloc[X.index.difference(outliers_index)] 
-    
-    dataset_no_outliers.reset_index(drop=True, inplace = True)
-    target_no_outliers.reset_index(drop=True, inplace = True)
-    dataset_no_outliers.drop(['anomaly'],axis=1,inplace=True)
-    return dataset_no_outliers, target_no_outliers
-
+PARALLELIZATION = len(sched_getaffinity(0))
 
 def UnderSampler(X, y):
     rus = RandomUnderSampler()
@@ -81,9 +52,6 @@ def myGSCV(X_train, y_train, params, n_splits=5):
                       'mean_fit_times': []}
     for i in range(0,n_splits):
         cv_result_dict['fold_{}_scores'.format(i)] = []
-
-    for i in range(0,n_splits):
-        cv_result_dict['fold_{}_features'.format(i)] = []
     
     cv_result_dict['mean_scores'] = []
     cv_result_dict['scores_std'] = []
@@ -125,15 +93,17 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             print("            TRAIN SET ROWS BEFORE OD: {}".format(len(X_in_train.index)))
             sys.stdout.flush()
 
-            print("            ROWS TAKEN BY OD: {} MOD".format(len(outliers_holder['MOD'])))
+            # print("            ROWS TAKEN BY OD: {} MOD".format(len(outliers_holder['MOD'])))
             sys.stdout.flush()
 
             ## Detección de outliers en entrenamiento
-            mod_X_train = X_in_train.iloc[X_in_train.index.difference(outliers_holder['MOD'])]
-            mod_y_train = y_in_train.iloc[y_in_train.index.difference(outliers_holder['MOD'])] 
+            # mod_X_train = X_in_train.iloc[X_in_train.index.difference(outliers_holder['MOD'])]
+            mod_X_train = X_in_train[~X_in_train['row_id'].isin(outliers_holder['MOD'])]
+            # mod_y_train = y_in_train.iloc[y_in_train.index.difference(outliers_holder['MOD'])] 
+            mod_y_train = y_in_train[~X_in_train['row_id'].isin(outliers_holder['MOD'])]
             
             # No debería ser necesario en el último conjunto de datos
-            # mod_X_train.drop(['startDateTime', 'stopDateTime'], axis = 1, inplace=True)
+            mod_X_train.drop(['row_id'], axis = 1, inplace=True)
             
             mod_X_train.reset_index(drop=True, inplace = True)
             mod_y_train.reset_index(drop=True, inplace = True)
@@ -160,11 +130,10 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             end = time.process_time()
             
             # Obtención y devolución de métricas
-            this_features = list(mod_X_train.columns)
             this_param_fit_times.append(end - start)
             
             # No debería hacer falta en el último conjunto de datos
-            # X_in_test.drop(['startDateTime', 'stopDateTime'], axis = 1, inplace=True)
+            X_in_test.drop(['row_id'], axis = 1, inplace=True)
             pred = this_model.predict(X_in_test)
 
             # Append score to the respective parameter-fold records
@@ -172,7 +141,6 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             score = f1_score(y_in_test['Target'], pred)
             this_param_scores.append(score)
             cv_result_dict['fold_{}_scores'.format(n_split)].append(score)
-            cv_result_dict['fold_{}_features'.format(n_split)].append(this_features)
             
             n_split = n_split + 1
         print("\n\n")
@@ -205,15 +173,15 @@ def main():
 
     ### X =  pd.read_csv(DATASET_PATH).head(20000)
     ### y =  pd.read_csv(TARGET_PATH).head(20000)
-    X = pd.read_csv(DATASET_PATH)
+    X = pd.read_csv(DATASET_PATH).head(200000)
     ###y = pd.read_csv(TARGET_PATH)
     y = X[['Target']]
-    X.drop(['row_id', 'Target'], inplace=True, axis=1)
+    X.drop(['Target'], inplace=True, axis=1)
     
 
     ## Definición del nombre de archivos de resultados
     RESULTS_FOLDER = datetime.now().strftime(r'RF_LOADED_O_RESULTADOS_EJECUCION_%Y_%m_%d_%H_%M_%S')
-    RESULTS_PATH = datetime.now().strftime(r'../../results/{}/it_{}_rf_%Y_%m_%d_%H_%M_%S.results')
+    RESULTS_PATH = datetime.now().strftime(r'../../results/{}/it_{}_rf_%Y_%m_%d_%H_%M_%S.json')
     LOG_FILE_PATH = datetime.now().strftime(r'../../logs/log_%Y_%m_%d_%H_%M_%S.log')
     try:
         os.makedirs(GENERAL_RESULTS_PATH + "/" + RESULTS_FOLDER)
@@ -227,11 +195,17 @@ def main():
 
 
     ## Repeticiones para probar consistencia con diferentes semillas
-    for i in range(0,1):
+    for global_iteration in range(0,2):
+        outer_results_dict = {}
+        for i in range(0, SPLITS_OUTER_CV):
+            outer_results_dict['out_fold_{}_scores'.format(i)] = []
+            outer_results_dict['out_fold_{}_inner_GSCV_results'.format(i)] = []
+
+
         ## Calculamos las combinaciones de parámetros
 
         # params_n_estimators = list(range(800,1500,100))
-        params_n_estimators = [800]
+        params_n_estimators = [800,900,1000,1200]
         params_criterion = ['gini']
         # params_max_features= list(range(5,30,7))
         params_max_features= [6]
@@ -246,11 +220,10 @@ def main():
 
         ## Iniciamos Outer CV
         cv_outer = StratifiedKFold(n_splits=SPLITS_OUTER_CV)
-        outer_results = {}
         splitN = 0
 
         print("*************************")
-        print("ITERATION {} IS STARTING.".format(i))
+        print("ITERATION {} IS STARTING.".format(global_iteration))
         print("*************************")
         for train_ix, test_ix in cv_outer.split(X,y):
             ## Recuperamos outliers del archivo donde los guardamos
@@ -283,11 +256,13 @@ def main():
 
 
             ## Detección de otliers en entrenamiento
-            mod_X_train = X_train.iloc[X_train.index.difference(outliers_holder['MOD'])]
-            mod_y_train = y_train.iloc[y_train.index.difference(outliers_holder['MOD'])] 
+            # mod_X_train = X_train.iloc[X_train.index.difference(outliers_holder['MOD'])]
+            mod_X_train = X_train[~X_train['row_id'].isin(outliers_holder['MOD'])]
+            # mod_y_train = y_train.iloc[y_train.index.difference(outliers_holder['MOD'])] 
+            mod_y_train = y_train[~X_train['row_id'].isin(outliers_holder['MOD'])]
 
             # No debería ser necesario con el nuevo conjunto
-            # mod_X_train.drop(['startDateTime', 'stopDateTime'], axis = 1, inplace=True)
+            mod_X_train.drop(['row_id'], axis = 1, inplace=True)
 
             mod_X_train.reset_index(drop=True, inplace = True)
             mod_y_train.reset_index(drop=True, inplace = True)
@@ -314,19 +289,20 @@ def main():
             ## Predecimos con el modelo
             # No debería ser necesario con el nuevo conjunto
             # X_test.drop(['startDateTime', 'stopDateTime'], axis = 1, inplace=True)
+            X_test.drop(['row_id'], axis = 1, inplace=True)
             yhat = best_model.predict(X_test)
 
             ## Calculamos CM
             conf_matrix = confusion_matrix(y_test, yhat)
  
             ## Guardamos resultados
-            outer_results = {'it_{}_scores'.format(splitN): conf_matrix.tolist(),
-                                'it_{}_params'.format(splitN): list(X_train.columns),
-                                'it_{}_inner_GSCV_results'.format(splitN): results}
+            #outer_results = {'out_fold_{}_scores'.format(splitN): conf_matrix.tolist(),
+            #                    'out_fold_{}_inner_GSCV_results'.format(splitN): results}
+
+            outer_results_dict['out_fold_{}_scores'.format(splitN)].append(conf_matrix.tolist())
+            outer_results_dict['out_fold_{}_inner_GSCV_results'.format(splitN)].append(results)
 
 
-            with open(RESULTS_PATH.format(RESULTS_FOLDER, splitN), "a") as jsonfile:
-                json.dump(outer_results, jsonfile)
 
             splitN = splitN + 1
             
@@ -334,6 +310,9 @@ def main():
             sys.stdout.flush()
 
 
+
+        with open(RESULTS_PATH.format(RESULTS_FOLDER, global_iteration), "w") as jsonfile:
+            json.dump(outer_results_dict, jsonfile)
 
     sys.stdout = old_stdout
     log_file.close()
