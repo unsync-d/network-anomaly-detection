@@ -13,7 +13,6 @@ from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score
 
-from telethon import TelegramClient, sync
 from datetime import datetime
 import itertools
 import requests
