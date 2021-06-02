@@ -65,9 +65,6 @@ def UnderSampler(X, y):
 
     return X_res,y_res
 
-def stringify_params(param):
-    return str(param[0]) + "_" + str(param[1]) + "_" + str(param[2])
-
 def myGSCV(X_train, y_train, params, n_splits=5):
     best_score = 0
     best_parameters = []
@@ -97,7 +94,6 @@ def myGSCV(X_train, y_train, params, n_splits=5):
                                             max_features=param[2], n_jobs=PARALLELIZATION)
         this_param_fit_times = []
         this_param_scores = []
-        this_features = []
 
         cv_inner = StratifiedKFold(n_splits=n_splits)
 
@@ -121,7 +117,7 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             mod_X_train = X_in_train[~X_in_train['row_id'].isin(outliers_holder['MOD'])]
             mod_y_train = y_in_train[~X_in_train['row_id'].isin(outliers_holder['MOD'])]
             
-            # No deberia ser necesario en el ultimo conjunto de datos
+            # Eliminacion de columna indice
             mod_X_train.drop(['row_id'], axis = 1, inplace=True)
             
             mod_X_train.reset_index(drop=True, inplace = True)
@@ -148,15 +144,13 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             this_model.fit(mod_X_train, mod_y_train.values.ravel())
             end = time.process_time()
             
-            # Obtencion y devolucion de metricas
-            this_param_fit_times.append(end - start)
             
-            # No deberia hacer falta en el ultimo conjunto de datos
+            # Eliminacion de columna indice y prediccion
             X_in_test.drop(['row_id'], axis = 1, inplace=True)
             pred = this_model.predict(X_in_test)
 
-            # Append score to the respective parameter-fold records
-            # score = accuracy_score(y_in_test['Target'], pred)
+            # Obtencion y devolucion de metricas
+            this_param_fit_times.append(end - start)
             score = f1_score(y_in_test['Target'], pred)
             this_param_scores.append(score)
             cv_result_dict['fold_{}_scores'.format(n_split)].append(score)
@@ -168,7 +162,7 @@ def myGSCV(X_train, y_train, params, n_splits=5):
         cv_result_dict['mean_fit_times'].append(np.array(this_param_fit_times).mean())
         temp_score = np.array(this_param_scores).mean()
         
-        if temp_score > best_score:
+        if temp_score > best_score: # Se considera la score media entre los folds
             best_score = temp_score
             best_parameters = param
         
@@ -210,21 +204,24 @@ def main():
     sys.stdout = console_and_file
 
 
+    ## Calculamos las combinaciones de parametros
+    params = []
+    params.append(PARAMS_NUM_ESTIMATORS)
+    params.append(PARAMS_CRITERION)
+    params.append(PARAMS_MAX_FEATURES)
+
+    params = list(itertools.product(*params))
+
+    # Cargamos los outliers
+    with open(OUTLIERS_PATH, "rb") as jsonfile:
+        outliers_holder = pickle.load(jsonfile)
+
     ## Repeticiones para probar consistencia con diferentes semillas
     for global_iteration in range(0,GLOBAL_ITS):
         outer_results_dict = {}
         for i in range(0, SPLITS_OUTER_CV):
             outer_results_dict['out_fold_{}_scores'.format(i)] = []
             outer_results_dict['out_fold_{}_inner_GSCV_results'.format(i)] = []
-
-
-        ## Calculamos las combinaciones de parametros
-        params = []
-        params.append(PARAMS_NUM_ESTIMATORS)
-        params.append(PARAMS_CRITERION)
-        params.append(PARAMS_MAX_FEATURES)
-
-        params = list(itertools.product(*params))
 
 
         ## Iniciamos Outer CV
@@ -235,14 +232,6 @@ def main():
         print("ITERATION {} IS STARTING.".format(global_iteration))
         print("*************************")
         for train_ix, test_ix in cv_outer.split(X,y):
-            ## Recuperamos outliers del archivo donde los guardamos
-            filepath = OUTLIERS_PATH
-
-            outliers_holder = []
-
-            with open(filepath, "rb") as jsonfile:
-                outliers_holder = pickle.load(jsonfile)
-
             print("   SPLIT {} IS STARTING.".format(splitN))
             sys.stdout.flush()
             X_train, X_test = X.iloc[train_ix, :], X.iloc[test_ix, :]
@@ -268,7 +257,7 @@ def main():
             mod_X_train = X_train[~X_train['row_id'].isin(outliers_holder['MOD'])]
             mod_y_train = y_train[~X_train['row_id'].isin(outliers_holder['MOD'])]
 
-            # No deberia ser necesario con el nuevo conjunto
+            # Eliminacion de la columna indice
             mod_X_train.drop(['row_id'], axis = 1, inplace=True)
 
             mod_X_train.reset_index(drop=True, inplace = True)
@@ -293,7 +282,7 @@ def main():
             best_model.set_params(**results['best_params'])
             best_model.fit(mod_X_train, mod_y_train.values.ravel())
 
-            ## Predecimos con el modelo
+            ## Eliminacion de la columna indice y predecimos con el modelo
             X_test.drop(['row_id'], axis = 1, inplace=True)
             yhat = best_model.predict(X_test)
 
