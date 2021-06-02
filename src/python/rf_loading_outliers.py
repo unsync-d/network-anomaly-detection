@@ -29,11 +29,35 @@ DATASET_PATH = r'../../data/dataset_dist.csv'
 
 OUTLIERS_PATH = r'../../outliers/MOD_final'
 
-# SPLITS_OUTER_CV=10
+GLOBAL_ITS = 2
 SPLITS_OUTER_CV=2
-# SPLITS_INNER_CV=5
 SPLITS_INNER_CV=3
+
 PARALLELIZATION = len(sched_getaffinity(0))
+# PARALLELIZATION = 1
+
+PARAMS_NUM_ESTIMATORS = [800,1000]
+PARAMS_CRITERION = ['gini']
+PARAMS_MAX_FEATURES = [6]
+
+
+class Logger(object):
+    def __init__(self, logfile):
+        self.terminal = sys.stdout
+        self.log = open(logfile, "w")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)  
+
+    def flush(self):
+        #this flush method is needed for python 3 compatibility.
+        #this handles the flush command by doing nothing.
+        #you might want to specify some extra behavior here.
+        pass  
+
+    def close(self):
+        self.log.close()
 
 def UnderSampler(X, y):
     rus = RandomUnderSampler()
@@ -56,7 +80,7 @@ def myGSCV(X_train, y_train, params, n_splits=5):
     cv_result_dict['mean_scores'] = []
     cv_result_dict['scores_std'] = []
 
-    # Por cada combinación de parámetros a probar...
+    # Por cada combinacion de parametros a probar...
     for param in params:
         ### Recuperamos outliers del archivo correspondente
         # OP -> Outliers Path
@@ -80,7 +104,7 @@ def myGSCV(X_train, y_train, params, n_splits=5):
 
         n_split = 0
         for in_train_ix, in_test_ix in cv_inner.split(X_train, y_train):
-            ## Separación de conjuntos
+            ## Separacion de conjuntos
             
             X_in_train, X_in_test = X_train.iloc[in_train_ix, :], X_train.iloc[in_test_ix, :]
             y_in_train, y_in_test = y_train.iloc[in_train_ix, :], y_train.iloc[in_test_ix, :]
@@ -93,16 +117,11 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             print("            TRAIN SET ROWS BEFORE OD: {}".format(len(X_in_train.index)))
             sys.stdout.flush()
 
-            # print("            ROWS TAKEN BY OD: {} MOD".format(len(outliers_holder['MOD'])))
-            sys.stdout.flush()
-
-            ## Detección de outliers en entrenamiento
-            # mod_X_train = X_in_train.iloc[X_in_train.index.difference(outliers_holder['MOD'])]
+            ## Deteccion de outliers en entrenamiento
             mod_X_train = X_in_train[~X_in_train['row_id'].isin(outliers_holder['MOD'])]
-            # mod_y_train = y_in_train.iloc[y_in_train.index.difference(outliers_holder['MOD'])] 
             mod_y_train = y_in_train[~X_in_train['row_id'].isin(outliers_holder['MOD'])]
             
-            # No debería ser necesario en el último conjunto de datos
+            # No deberia ser necesario en el ultimo conjunto de datos
             mod_X_train.drop(['row_id'], axis = 1, inplace=True)
             
             mod_X_train.reset_index(drop=True, inplace = True)
@@ -129,10 +148,10 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             this_model.fit(mod_X_train, mod_y_train.values.ravel())
             end = time.process_time()
             
-            # Obtención y devolución de métricas
+            # Obtencion y devolucion de metricas
             this_param_fit_times.append(end - start)
             
-            # No debería hacer falta en el último conjunto de datos
+            # No deberia hacer falta en el ultimo conjunto de datos
             X_in_test.drop(['row_id'], axis = 1, inplace=True)
             pred = this_model.predict(X_in_test)
 
@@ -145,7 +164,7 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             n_split = n_split + 1
         print("\n\n")
         
-        # Obtención de métricas por combinación de parámetros
+        # Obtencion de metricas por combinacion de parametros
         cv_result_dict['mean_fit_times'].append(np.array(this_param_fit_times).mean())
         temp_score = np.array(this_param_scores).mean()
         
@@ -158,7 +177,7 @@ def myGSCV(X_train, y_train, params, n_splits=5):
         cv_result_dict['params'].append(param)
 
     
-    # Devolvemos mejores métricas
+    # Devolvemos mejores metricas
     cv_result_dict['best_score'] = best_score
     cv_result_dict['best_params'] = {'n_estimators':best_parameters[0],'criterion':best_parameters[1],'max_features':best_parameters[2]}
     return cv_result_dict
@@ -169,17 +188,14 @@ def main():
     ## Establecemos la "semilla raiz" para garantizar reproductibilidad 
     np.random.seed(809)
 
-    ## Recuperación del conjunto de datos
+    ## Recuperacion del conjunto de datos
 
-    ### X =  pd.read_csv(DATASET_PATH).head(20000)
-    ### y =  pd.read_csv(TARGET_PATH).head(20000)
     X = pd.read_csv(DATASET_PATH).head(200000)
-    ###y = pd.read_csv(TARGET_PATH)
     y = X[['Target']]
     X.drop(['Target'], inplace=True, axis=1)
     
 
-    ## Definición del nombre de archivos de resultados
+    ## Definicion del nombre de archivos de resultados
     RESULTS_FOLDER = datetime.now().strftime(r'RF_LOADED_O_RESULTADOS_EJECUCION_%Y_%m_%d_%H_%M_%S')
     RESULTS_PATH = datetime.now().strftime(r'../../results/{}/it_{}_rf_%Y_%m_%d_%H_%M_%S.json')
     LOG_FILE_PATH = datetime.now().strftime(r'../../logs/log_%Y_%m_%d_%H_%M_%S.log')
@@ -188,32 +204,25 @@ def main():
     except OSError as e:
         raise
 
-    ### Redireccionamos salida estándar al archivo de log 
-    log_file = open(LOG_FILE_PATH, "w")
+    ### Redireccionamos salida estandar al archivo de log 
     old_stdout = sys.stdout
-    sys.stdout = log_file
+    console_and_file = Logger(LOG_FILE_PATH)
+    sys.stdout = console_and_file
 
 
     ## Repeticiones para probar consistencia con diferentes semillas
-    for global_iteration in range(0,2):
+    for global_iteration in range(0,GLOBAL_ITS):
         outer_results_dict = {}
         for i in range(0, SPLITS_OUTER_CV):
             outer_results_dict['out_fold_{}_scores'.format(i)] = []
             outer_results_dict['out_fold_{}_inner_GSCV_results'.format(i)] = []
 
 
-        ## Calculamos las combinaciones de parámetros
-
-        # params_n_estimators = list(range(800,1500,100))
-        params_n_estimators = [800,900,1000,1200]
-        params_criterion = ['gini']
-        # params_max_features= list(range(5,30,7))
-        params_max_features= [6]
-
+        ## Calculamos las combinaciones de parametros
         params = []
-        params.append(params_n_estimators)
-        params.append(params_criterion)
-        params.append(params_max_features)
+        params.append(PARAMS_NUM_ESTIMATORS)
+        params.append(PARAMS_CRITERION)
+        params.append(PARAMS_MAX_FEATURES)
 
         params = list(itertools.product(*params))
 
@@ -255,13 +264,11 @@ def main():
             sys.stdout.flush()
 
 
-            ## Detección de otliers en entrenamiento
-            # mod_X_train = X_train.iloc[X_train.index.difference(outliers_holder['MOD'])]
+            ## Deteccion de otliers en entrenamiento
             mod_X_train = X_train[~X_train['row_id'].isin(outliers_holder['MOD'])]
-            # mod_y_train = y_train.iloc[y_train.index.difference(outliers_holder['MOD'])] 
             mod_y_train = y_train[~X_train['row_id'].isin(outliers_holder['MOD'])]
 
-            # No debería ser necesario con el nuevo conjunto
+            # No deberia ser necesario con el nuevo conjunto
             mod_X_train.drop(['row_id'], axis = 1, inplace=True)
 
             mod_X_train.reset_index(drop=True, inplace = True)
@@ -287,8 +294,6 @@ def main():
             best_model.fit(mod_X_train, mod_y_train.values.ravel())
 
             ## Predecimos con el modelo
-            # No debería ser necesario con el nuevo conjunto
-            # X_test.drop(['startDateTime', 'stopDateTime'], axis = 1, inplace=True)
             X_test.drop(['row_id'], axis = 1, inplace=True)
             yhat = best_model.predict(X_test)
 
@@ -296,8 +301,6 @@ def main():
             conf_matrix = confusion_matrix(y_test, yhat)
  
             ## Guardamos resultados
-            #outer_results = {'out_fold_{}_scores'.format(splitN): conf_matrix.tolist(),
-            #                    'out_fold_{}_inner_GSCV_results'.format(splitN): results}
 
             outer_results_dict['out_fold_{}_scores'.format(splitN)].append(conf_matrix.tolist())
             outer_results_dict['out_fold_{}_inner_GSCV_results'.format(splitN)].append(results)
@@ -315,7 +318,7 @@ def main():
             json.dump(outer_results_dict, jsonfile)
 
     sys.stdout = old_stdout
-    log_file.close()
+    console_and_file.close()
 
 if __name__ == "__main__":
     main()
