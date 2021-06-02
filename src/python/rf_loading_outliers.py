@@ -103,9 +103,6 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             
             X_in_train, X_in_test = X_train.iloc[in_train_ix, :], X_train.iloc[in_test_ix, :]
             y_in_train, y_in_test = y_train.iloc[in_train_ix, :], y_train.iloc[in_test_ix, :]
-            
-            X_in_train.reset_index(drop=True, inplace=True)
-            y_in_train.reset_index(drop=True, inplace=True)
 
             print("         STARTING INNER OUTLIER DETECTION: PARAMS({}) IT({})".format(param,n_split))
             sys.stdout.flush()
@@ -118,9 +115,6 @@ def myGSCV(X_train, y_train, params, n_splits=5):
             
             # Eliminacion de columna indice
             mod_X_train.drop(['row_id'], axis = 1, inplace=True)
-            
-            mod_X_train.reset_index(drop=True, inplace = True)
-            mod_y_train.reset_index(drop=True, inplace = True)
 
 
             print("            TRAIN SET ROWS AFTER OD: {}\n".format(len(mod_X_train.index)))
@@ -236,9 +230,6 @@ def main():
             X_train, X_test = X.iloc[train_ix, :], X.iloc[test_ix, :]
             y_train, y_test = y.iloc[train_ix, :], y.iloc[test_ix, :]
 
-            X_train.reset_index(drop=True, inplace=True)
-            y_train.reset_index(drop=True, inplace=True)
-
             print("      GSCV IS STARTING.")
             sys.stdout.flush()
             # Inner GSCV
@@ -258,9 +249,6 @@ def main():
 
             # Eliminacion de la columna indice
             mod_X_train.drop(['row_id'], axis = 1, inplace=True)
-
-            mod_X_train.reset_index(drop=True, inplace = True)
-            mod_y_train.reset_index(drop=True, inplace = True)
 
             print("         TRAIN SET ROWS AFTER OD: {}\n".format(len(mod_X_train.index)))
             sys.stdout.flush()
