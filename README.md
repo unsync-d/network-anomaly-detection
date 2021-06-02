@@ -50,7 +50,7 @@ cd src/python
 python rf_loading_outliers.py
 ````
 
-Durante la ejecución del script, se creará e irá actualizando un archivo de log en el directorio `/logs`. Al terminar, se creará un directorio con los resultados en archivos JSON dentro del directorio `/results`.
+Durante la ejecución del script, se irá tanto mostrando por pantalla como guardando en un archivo (bajo el directorio `/logs`) los logs de la ejecución. Al terminar, se creará un directorio con los resultados en archivos JSON dentro del directorio `/results`.
 
 ## Estado base y modificación de los parámetros
 Los parámetros con los que está establecido ahora mismo el script son de prueba, y están pensados para ejecuciones rápidas que muestren la funcionalidad. A continuación se indican los parámetros fundamentales que se pueden modificar, su localización y valor por defecto:
